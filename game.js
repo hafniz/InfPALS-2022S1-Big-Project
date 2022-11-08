@@ -1,22 +1,27 @@
 const SETTINGS = {
+    aiDetectionRange: 0.3,
+    aiPaddleSpeed: 270,
+    backgroundColor: "green",
     ballColor: "white",
     ballRadius: 12,
     ballSpeed: 400,
     centerLineColor: "black",
     centerLineGapLength: 34,
     centerLineSegmentLength: 68,
-    courtBackgroundColor: "green",
     gameFPS: 60,
     gameHeight: 900,
     gameWidth: 1200,
-    paddleBounceSound: "/Sounds/Paddle.wav",
+    paddleBounceSound: "./Sounds/Paddle.wav",
     paddleColor: "white",
     paddleHeight: 120,
     paddleLeftRightMargin: 34,
     paddleWidth: 40,
+    player1Type: "mouse",
+    player2Type: "ai",
+    playSoundEffects: true,
     scoreBoardFontFamily: "retro",
     scoreBoardFontSize: 10,
-    scoreSound: "/Sounds/Score.wav",
+    scoreSound: "./Sounds/Score.wav",
     scoreToWinMatch: 8,
     startButtonColor: "white",
     startButtonFontFamily: "retro",
@@ -24,7 +29,7 @@ const SETTINGS = {
     startButtonHeight: 80,
     startButtonTextColor: "black",
     startButtonWidth: 200,
-    topBottomBorderBounceSound: "/Sounds/Wall.wav",
+    topBottomBorderBounceSound: "./Sounds/Wall.wav",
     topBottomBorderColor: "blue",
     topBottomBorderHeight: 25
 }
@@ -62,14 +67,26 @@ class Court {
         this.paddle1 = new Paddle(SETTINGS.paddleLeftRightMargin, SETTINGS.gameHeight / 2 - SETTINGS.paddleHeight / 2, SETTINGS.paddleWidth, SETTINGS.paddleHeight, PLAYERS.playerOne, this);
         this.paddle2 = new Paddle(SETTINGS.gameWidth - SETTINGS.paddleWidth - SETTINGS.paddleLeftRightMargin, SETTINGS.gameHeight / 2 - SETTINGS.paddleHeight / 2, SETTINGS.paddleWidth, SETTINGS.paddleHeight, PLAYERS.playerTwo, this);
         this.ball = new Ball(SETTINGS.gameWidth / 2, SETTINGS.gameHeight / 2, SETTINGS.ballRadius, this);
-        this.paddleController1 = new MousePaddleController(this.paddle1);
-        this.paddleController2 = new MousePaddleController(this.paddle2);
+        if (SETTINGS.player1Type == "ai") {
+            this.paddleController1 = new AIPaddleController(this.paddle1, this);
+        }
+        else {
+            this.paddleController1 = new MousePaddleController(this.paddle1, this);
+        }
+        if (SETTINGS.player2Type == "ai") {
+            this.paddleController2 = new AIPaddleController(this.paddle2, this);
+        }
+        else {
+            this.paddleController2 = new MousePaddleController(this.paddle2, this);
+        }
         this.scoreBoard = new ScoreBoard(0, 0, 1, this);
         this.isMatchRunning = false;
         this.startButton = new Rectangle(SETTINGS.gameWidth / 2 - SETTINGS.startButtonWidth / 2, SETTINGS.gameHeight / 2 - SETTINGS.startButtonHeight / 2, SETTINGS.startButtonWidth, SETTINGS.startButtonHeight);
         this.canvas.addEventListener("click", (e) => {
-            if (!this.isMatchRunning && this.startButton.contains(e.clientX, e.clientY)) {
-                this.startMatch();
+            if (!this.isMatchRunning && this.startButton.contains(e.clientX, e.clientY)) { // start the match
+                this.scoreBoard = new ScoreBoard(-1, 0, 0, this);
+                this.onPlayerScore(PLAYERS.playerOne);
+                this.isMatchRunning = true;
             }
         });
     }
@@ -86,12 +103,18 @@ class Court {
     update(dT) {
         if (this.isMatchRunning) {
             this.ball.update(dT);
+            if (this.paddleController1 instanceof AIPaddleController) {
+                this.paddleController1.update(dT);
+            }
+            if (this.paddleController2 instanceof AIPaddleController) {
+                this.paddleController2.update(dT);
+            }
         }
     }
 
     draw() {
         let context = this.canvas.getContext("2d");
-        context.fillStyle = SETTINGS.courtBackgroundColor;
+        context.fillStyle = SETTINGS.backgroundColor;
         context.fillRect(0, 0, SETTINGS.gameWidth, SETTINGS.gameHeight);
 
         context.fillStyle = SETTINGS.topBottomBorderColor;
@@ -125,12 +148,6 @@ class Court {
         }
     }
 
-    startMatch() {
-        this.scoreBoard = new ScoreBoard(-1, 0, 0, this);
-        this.onPlayerScore(PLAYERS.playerOne);
-        this.isMatchRunning = true;
-    }
-
     onPlayerScore(player) {
         if (player == PLAYERS.playerOne) {
             ++this.scoreBoard.player1Score;
@@ -138,23 +155,28 @@ class Court {
         else {
             ++this.scoreBoard.player2Score;
         }
+
         if (this.scoreBoard.winner == undefined) {
             ++this.scoreBoard.roundNumber;
+
+            // respawn the ball
+            let angle = Math.random() < 0.5 ? (2 / 3 + 2 / 3 * Math.random()) * Math.PI : (5 / 3 + 2 / 3 * Math.random()) % 2 * Math.PI;
+            this.ball.velocity.vy = Math.sin(angle) * SETTINGS.ballSpeed;
+            this.ball.velocity.vx = Math.cos(angle) * SETTINGS.ballSpeed;
+            this.ball.x = SETTINGS.gameWidth / 2;
+            this.ball.y = SETTINGS.gameHeight / 2;
+
+            // reset paddle position for AI players
+            if (this.paddleController1 instanceof AIPaddleController) {
+                this.paddle1.y = SETTINGS.gameHeight / 2 - SETTINGS.paddleHeight / 2;
+            }
+            if (this.paddleController2 instanceof AIPaddleController) {
+                this.paddle2.y = SETTINGS.gameHeight / 2 - SETTINGS.paddleHeight / 2;
+            }
         }
         else {
-            this.isMatchRunning = false; // ends game
+            this.isMatchRunning = false; // end the match
         }
-
-        // respawn the ball
-        let angle = Math.random() < 0.5 ? (2 / 3 + 2 / 3 * Math.random()) * Math.PI : (5 / 3 + 2 / 3 * Math.random()) % 2 * Math.PI;
-        this.ball.velocity.vy = Math.sin(angle) * SETTINGS.ballSpeed;
-        this.ball.velocity.vx = Math.cos(angle) * SETTINGS.ballSpeed;
-        this.ball.x = SETTINGS.gameWidth / 2;
-        this.ball.y = SETTINGS.gameHeight / 2;
-
-        // reset paddle position
-        this.paddle1.y = SETTINGS.gameHeight / 2 - SETTINGS.paddleHeight / 2;
-        this.paddle2.y = SETTINGS.gameHeight / 2 - SETTINGS.paddleHeight / 2;
     }
 }
 
@@ -180,26 +202,46 @@ class Paddle {
 }
 
 class MousePaddleController {
-    constructor(paddle) {
+    constructor(paddle, court) {
         this.paddle = paddle;
-        this.paddle.court.canvas.addEventListener("mousemove", (e) => {
-            if (e.clientY <= SETTINGS.topBottomBorderHeight + this.paddle.height / 2) {
-                this.paddle.y = SETTINGS.topBottomBorderHeight;
-            }
-            else if (e.clientY >= SETTINGS.gameHeight - SETTINGS.topBottomBorderHeight - this.paddle.height / 2) {
-                this.paddle.y = SETTINGS.gameHeight - SETTINGS.topBottomBorderHeight - this.paddle.height;
-            }
-            else {
-                this.paddle.y = e.clientY - this.paddle.height / 2;
+        this.court = court;
+        this.court.canvas.addEventListener("mousemove", (e) => {
+            if (this.court.isMatchRunning) {
+                if (e.clientY <= SETTINGS.topBottomBorderHeight + this.paddle.height / 2) {
+                    this.paddle.y = SETTINGS.topBottomBorderHeight;
+                }
+                else if (e.clientY >= SETTINGS.gameHeight - SETTINGS.topBottomBorderHeight - this.paddle.height / 2) {
+                    this.paddle.y = SETTINGS.gameHeight - SETTINGS.topBottomBorderHeight - this.paddle.height;
+                }
+                else {
+                    this.paddle.y = e.clientY - this.paddle.height / 2;
+                }
             }
         });
     }
 }
 
 class AIPaddleController {
+    constructor(paddle, court) {
+        this.paddle = paddle;
+        this.court = court;
+    }
 
+    update(dT) {
+        if ((this.paddle.x - this.court.ball.x) / this.court.ball.velocity.vx > 0 && Math.abs(this.paddle.x - this.court.ball.x) < SETTINGS.gameWidth * SETTINGS.aiDetectionRange && (this.court.ball.y < this.paddle.y || this.court.ball.y > this.paddle.y + this.paddle.height)) {
+            let targetY = this.paddle.y + Math.sign(this.court.ball.y - this.paddle.y - this.paddle.height / 2) * SETTINGS.aiPaddleSpeed * dT;
+            if (targetY < SETTINGS.topBottomBorderHeight) {
+                this.paddle.y = SETTINGS.topBottomBorderHeight;
+            }
+            else if (targetY > SETTINGS.gameHeight - SETTINGS.topBottomBorderHeight - this.paddle.height) {
+                this.paddle.y = SETTINGS.gameHeight - SETTINGS.topBottomBorderHeight - this.paddle.height;
+            }
+            else {
+                this.paddle.y = targetY;
+            }
+        }
+    }
 }
-
 
 class Ball {
     constructor(x, y, radius, court) {
@@ -211,6 +253,9 @@ class Ball {
             vx: SETTINGS.ballSpeed,
             vy: SETTINGS.ballSpeed
         };
+        this.scoreSound = new Audio(SETTINGS.scoreSound);
+        this.paddleBounceSound = new Audio(SETTINGS.paddleBounceSound);
+        this.topBottomBorderBounceSound = new Audio(SETTINGS.topBottomBorderBounceSound);
     }
 
     get collisionBox() {
@@ -219,37 +264,52 @@ class Ball {
 
     update(dT) {
         if (this.x < this.court.bounds.left) { // player 2 scores
+            if (SETTINGS.playSoundEffects) {
+                this.scoreSound.currentTime = 0;
+                this.scoreSound.play();
+            }
             this.court.onPlayerScore(PLAYERS.playerTwo);
         }
         else if (this.x > this.court.bounds.right) { // player 1 scores
+            if (SETTINGS.playSoundEffects) {
+                this.scoreSound.currentTime = 0;
+                this.scoreSound.play();
+            }
             this.court.onPlayerScore(PLAYERS.playerOne);
         }
         else if (this.collisionBox.overlaps(this.court.paddle1.collisionBox)) { // player 1 hits
+            if (SETTINGS.playSoundEffects) {
+                this.paddleBounceSound.currentTime = 0;
+                this.paddleBounceSound.play();
+            }
             this.velocity.vx *= -1;
             this.x = this.court.paddle1.x + this.court.paddle1.width + this.radius;
         }
         else if (this.collisionBox.overlaps(this.court.paddle2.collisionBox)) { // player 2 hits
+            if (SETTINGS.playSoundEffects) {
+                this.paddleBounceSound.currentTime = 0;
+                this.paddleBounceSound.play();
+            }
             this.velocity.vx *= -1;
             this.x = this.court.paddle2.x - this.radius;
         }
 
         if (this.y < this.court.bounds.upper + this.radius) {
+            if (SETTINGS.playSoundEffects) {
+                this.topBottomBorderBounceSound.currentTime = 0;
+                this.topBottomBorderBounceSound.play();
+            }
             this.velocity.vy *= -1;
             this.y = this.court.bounds.upper + this.radius;
         }
         else if (this.y > this.court.bounds.lower - this.radius) {
+            if (SETTINGS.playSoundEffects) {
+                this.topBottomBorderBounceSound.currentTime = 0;
+                this.topBottomBorderBounceSound.play();
+            }
             this.velocity.vy *= -1;
             this.y = this.court.bounds.lower - this.radius;
         }
-
-        //if (this.x < this.court.bounds.left + this.radius) {
-        //    this.velocity.vx *= -1;
-        //    this.x = this.court.bounds.left + this.radius;
-        //}
-        //else if (this.x > this.court.bounds.right - this.radius) {
-        //    this.velocity.vx *= -1;
-        //    this.x = this.court.bounds.right - this.radius;
-        //}
 
         this.x += this.velocity.vx * dT;
         this.y += this.velocity.vy * dT;
@@ -308,7 +368,6 @@ class ScoreBoard {
     }
 }
 
-
 class Rectangle {
     constructor(x, y, width, height) {
         this.x = x;
@@ -334,5 +393,4 @@ class Rectangle {
 const canvas = document.getElementById("game");
 canvas.width = SETTINGS.gameWidth;
 canvas.height = SETTINGS.gameHeight;
-let game = new Game(canvas);
-game.start();
+new Game(canvas).start();
