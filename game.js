@@ -356,7 +356,7 @@ class ScoreBoard {
             centerText = "Round " + this.roundNumber;
         }
         else if (this.winner == undefined) {
-            centerText = "Score 8 to win!";
+            centerText = "Score " + SETTINGS.scoreToWinMatch + " to win!";
         }
         else {
             centerText = this.winner == PLAYERS.playerOne ? "Player one wins!" : "Player two wins!";
